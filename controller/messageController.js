@@ -1,6 +1,7 @@
+import { catchAsyncErrors } from "../middlewares/catchAsyncErrors.js";
 import { Message } from "../models/messageSchema.js"
 
-export const sendMessage = async(req, res, next) => {
+export const sendMessage = catchAsyncErrors(async(req, res, next) => {
     const {firstName, lastName, email,  phone, message} = req.body;
 
     if(!firstName || !lastName || !email || !phone || !message){
@@ -15,4 +16,4 @@ export const sendMessage = async(req, res, next) => {
         success: true,
         message: "message send successfully!"
     });
-};
+})
