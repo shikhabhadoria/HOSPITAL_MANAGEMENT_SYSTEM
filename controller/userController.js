@@ -201,15 +201,17 @@ export const addNewDocter = catchAsyncErrors(async(req, res, next) => {
         docAvatar.tempFilePath
     );
 
+    console.log(cloudinaryResponse);
+
     if(!cloudinaryResponse || cloudinaryResponse.error){
         console.error(
             "cloudinary Error",
-            cloudinaryResponse.error || "Unknown cloudinary Error"
+            cloudinaryResponse?.error || "Unknown cloudinary Error"
         );
     }
 
    
-    const docter = await user.create({
+    const docter = await User.create({
         firstName,
         lastName,
         email,
@@ -219,9 +221,9 @@ export const addNewDocter = catchAsyncErrors(async(req, res, next) => {
         dob,
         nic,
         doctorDepartment,
-        role:"Docter",
+        role:"Doctor",
         docAvatar:{
-            public_id: cloudianryResponse.public_id,
+            public_id: cloudinaryResponse.public_id,
             url: cloudinaryResponse.secure_url,
         },
     });
