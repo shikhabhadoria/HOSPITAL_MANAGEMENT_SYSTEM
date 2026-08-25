@@ -42,7 +42,7 @@ const App = () => {
             <Route path="/" element={<Home></Home>}></Route>
             <Route path="/appointment" element={<Appointment></Appointment>}></Route>
             <Route path="/about" element={<AboutUs></AboutUs>}></Route>
-            <Route path="/egister" element={<Register></Register>}></Route>
+            <Route path="/register" element={<Register></Register>}></Route>
             <Route path="/login" element={<Login></Login>}></Route>
           </Routes>
           <ToastContainer position="top-center"></ToastContainer>
