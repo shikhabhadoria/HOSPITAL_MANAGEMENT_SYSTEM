@@ -13,7 +13,7 @@
 #
 #  Jobs run in PARALLEL by default and each one gets its own clean machine
 #  (a "runner"). `needs:` is how you force them into a sequence, which is
-#  exactly what we want here:  lint -> test -> deploy
+#  exactly what we want here:  lint -> deploy
 # ---------------------------------------------------------------------------
 
 name: Backend CI/CD          # shown in the GitHub "Actions" tab
@@ -49,10 +49,10 @@ env:
 
 jobs:
   # =========================================================================
-  #  JOB 1 - LINT
+  #  JOB 1 - LINT   (the "CI" half)
   #  Static checks: does the code parse, are there unused/undefined variables,
   #  is the style consistent? No code is executed, so this is the fastest
-  #  feedback you can get. It runs first for exactly that reason.
+  #  feedback you can get - which is why it's the gate in front of deploy.
   # =========================================================================
   lint:
     name: Lint
@@ -85,14 +85,40 @@ jobs:
       - name: Run ESLint
         run: npm run lint
       # If ESLint exits non-zero, the step fails -> the job fails ->
-      # the whole workflow goes red and `test` never starts.
+      # the whole workflow goes red and `deploy` never starts.
 
   # =========================================================================
-  #  JOB 2 - TEST
-  #  Actually runs the code and asserts it behaves correctly.
-  #  `needs: lint` means: do not start until the lint job has SUCCEEDED.
+  #  JOB 2 - DEPLOY  (the "CD" half)
+  #  SSH into the EC2 box, pull the new code, install deps, (re)start pm2.
+  #
+  #  Assumes you have ALREADY done these two things on the server, by hand, once:
+  #    1. git clone <this repo> into EC2_APP_DIR
+  #    2. created Backend/config/config.env with the real values
+  #  Both are checked below and fail with a clear message if missing.
+  #
+  #  From then on this job handles BOTH cases on its own:
+  #    - the 1st deploy  -> pm2 has no process yet  -> `pm2 start`
+  #    - the Nth deploy  -> pm2 already running it  -> `pm2 restart`
+  #
+  #  Two guards on the job itself:
+  #    needs: lint  -> only deploy code that passed the lint gate
+  #    if: ...      -> only deploy on a real push to main/master, never from a
+  #                    pull request (a PR is someone else's code; you don't
+  #                    want it running on your server)
   # =========================================================================
-  # 
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+    needs: lint
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+
+    # `environment` is optional but useful: in repo Settings you can require
+    # a manual approval before any job in this environment runs.
+    # environment: production
+
+    steps:
+      # Note: no `checkout` here. We aren't building anything on the runner -
+      # the EC2 machine pulls the code from GitHub itself.
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1
         with:
