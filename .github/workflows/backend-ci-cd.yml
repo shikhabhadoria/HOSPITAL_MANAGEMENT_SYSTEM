@@ -1,0 +1,257 @@
+# ---------------------------------------------------------------------------
+#  WORKFLOW
+# ---------------------------------------------------------------------------
+#  A *workflow* is one automated process, described by one YAML file that
+#  lives in .github/workflows/. GitHub reads every file in that folder and
+#  runs it whenever the events listed under `on:` happen.
+#
+#  The vocabulary, smallest to biggest:
+#
+#    step     -> a single command, or a single reusable action (`uses:`)
+#    job      -> a named group of steps that run in order, on ONE fresh VM
+#    workflow -> a named group of jobs (this whole file)
+#
+#  Jobs run in PARALLEL by default and each one gets its own clean machine
+#  (a "runner"). `needs:` is how you force them into a sequence, which is
+#  exactly what we want here:  lint -> test -> deploy
+# ---------------------------------------------------------------------------
+
+name: Backend CI/CD          # shown in the GitHub "Actions" tab
+
+# ---------------------------------------------------------------------------
+#  ON  ->  the trigger. When should this workflow run?
+# ---------------------------------------------------------------------------
+on:
+  push:
+    branches: [main, master]
+    # `paths` = only run when the Backend actually changed. Editing the
+    # Frontend or a README shouldn't burn CI minutes on the backend.
+    paths:
+      - "Backend/**"
+      - ".github/workflows/backend-ci-cd.yml"
+
+  pull_request:
+    branches: [main, master]
+    paths:
+      - "Backend/**"
+      - ".github/workflows/backend-ci-cd.yml"
+
+  # Adds a "Run workflow" button in the Actions tab so you can trigger it by hand.
+  workflow_dispatch:
+
+# ---------------------------------------------------------------------------
+#  ENV  ->  variables shared by every job in this workflow.
+#  (Anything secret goes in Settings -> Secrets, NOT here.)
+# ---------------------------------------------------------------------------
+env:
+  NODE_VERSION: "22"
+  WORKING_DIR: Backend
+
+jobs:
+  # =========================================================================
+  #  JOB 1 - LINT
+  #  Static checks: does the code parse, are there unused/undefined variables,
+  #  is the style consistent? No code is executed, so this is the fastest
+  #  feedback you can get. It runs first for exactly that reason.
+  # =========================================================================
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest          # the OS image GitHub gives us
+
+    # `defaults` saves us writing `working-directory:` on every single step.
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+
+    steps:
+      # `uses:` pulls in a reusable action written by someone else.
+      # This one clones your repo onto the runner - without it the VM is empty.
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm                                  # cache ~/.npm between runs
+          cache-dependency-path: Backend/package-lock.json
+
+      # `run:` executes a shell command on the runner.
+      # `npm ci` (not `npm install`) installs the EXACT versions from
+      # package-lock.json. Reproducible builds are the whole point of CI.
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run ESLint
+        run: npm run lint
+      # If ESLint exits non-zero, the step fails -> the job fails ->
+      # the whole workflow goes red and `test` never starts.
+
+  # =========================================================================
+  #  JOB 2 - TEST
+  #  Actually runs the code and asserts it behaves correctly.
+  #  `needs: lint` means: do not start until the lint job has SUCCEEDED.
+  # =========================================================================
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    needs: lint
+
+    defaults:
+      run:
+        working-directory: ${{ env.WORKING_DIR }}
+
+    # A `matrix` runs this same job once per value in the list. Handy for
+    # proving the backend works on more than one Node version.
+    strategy:
+      fail-fast: false              # don't cancel Node 22 just because 20 failed
+      matrix:
+        node-version: ["20", "22"]
+
+    steps:
+      - name: Check out the repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
+          cache-dependency-path: Backend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Run tests
+        run: npm test
+        env:
+          # Our app.js checks this and skips the MongoDB connection,
+          # so the test suite needs no database and no real secrets.
+          NODE_ENV: test
+
+  # =========================================================================
+  #  JOB 3 - DEPLOY  (the "CD" half)
+  #  SSH into the EC2 box, pull the new code, install deps, (re)start pm2.
+  #
+  #  Assumes you have ALREADY done these two things on the server, by hand, once:
+  #    1. git clone <this repo> into EC2_APP_DIR
+  #    2. created Backend/config/config.env with the real values
+  #  Both are checked below and fail with a clear message if missing.
+  #
+  #  From then on this job handles BOTH cases on its own:
+  #    - the 1st deploy  -> pm2 has no process yet  -> `pm2 start`
+  #    - the Nth deploy  -> pm2 already running it  -> `pm2 restart`
+  #
+  #  Two guards on the job itself:
+  #    needs: [lint, test]  -> only deploy code that passed both gates
+  #    if: ...              -> only deploy on a real push to main/master,
+  #                            never from a pull request (a PR is someone
+  #                            else's code; you don't want it on your server)
+  # =========================================================================
+  deploy:
+    name: Deploy to EC2
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    if: github.event_name == 'push' && (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master')
+
+    # `environment` is optional but useful: in repo Settings you can require
+    # a manual approval before any job in this environment runs.
+    # environment: production
+
+    steps:
+      # Note: no `checkout` here. We aren't building anything on the runner -
+      # the EC2 machine pulls the code from GitHub itself.
+      - name: Deploy over SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}         # e.g. 13.234.56.78
+          username: ${{ secrets.EC2_USER }}     # e.g. ubuntu
+          key: ${{ secrets.EC2_SSH_KEY }}       # the full .pem contents
+          port: 22
+          script_stop: true                     # abort on the first failing line
+          script: |
+            set -e
+
+            APP_DIR="${{ secrets.EC2_APP_DIR }}"
+            PM2_APP="${{ secrets.PM2_APP_NAME }}"
+
+            # ---- 1. Preconditions --------------------------------------------
+            if [ ! -d "$APP_DIR/.git" ]; then
+              echo "ERROR: $APP_DIR is not a git clone."
+              echo "Clone the repo there once, then re-run this workflow."
+              exit 1
+            fi
+
+            # config/config.env is gitignored on purpose - real secrets must
+            # never live in the repo. You create it once by hand; because git
+            # doesn't track it, `git reset --hard` below can't wipe it.
+            if [ ! -f "$APP_DIR/Backend/config/config.env" ]; then
+              echo "ERROR: $APP_DIR/Backend/config/config.env does not exist."
+              echo "Create it from Backend/config/config.env.example and re-run."
+              exit 1
+            fi
+
+            # ---- 2. Take exactly what is on GitHub ---------------------------
+            cd "$APP_DIR"
+            echo "--> Fetching latest code"
+            git fetch --all
+            # `reset --hard` makes the server match GitHub EXACTLY. Any manual
+            # edit someone made on the box is thrown away - which is the point:
+            # the deployed code is always something you can find in git history.
+            git reset --hard "origin/${{ github.ref_name }}"
+            echo "--> Now at commit: $(git rev-parse --short HEAD)"
+
+            # ---- 3. Install production dependencies --------------------------
+            cd Backend
+            echo "--> Installing dependencies"
+            npm ci --omit=dev
+
+            # ---- 4. Start (1st deploy) or restart (every deploy after) --------
+            if pm2 describe "$PM2_APP" > /dev/null 2>&1; then
+              echo "--> Restarting $PM2_APP"
+              pm2 restart "$PM2_APP" --update-env
+            else
+              echo "--> No pm2 process yet, starting $PM2_APP for the first time"
+              pm2 start server.js --name "$PM2_APP"
+            fi
+
+            pm2 save          # write the process list so `pm2 resurrect` can restore it
+            pm2 list
+
+      # A deploy is not "done" because the SSH commands exited 0.
+      # It is done when the server actually answers. We curl /health from
+      # INSIDE the box (localhost), so this works even if your EC2 security
+      # group hasn't opened the backend port to the internet yet.
+      - name: Smoke test /health
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.EC2_HOST }}
+          username: ${{ secrets.EC2_USER }}
+          key: ${{ secrets.EC2_SSH_KEY }}
+          port: 22
+          script_stop: true
+          script: |
+            cd "${{ secrets.EC2_APP_DIR }}/Backend"
+
+            # Read PORT straight out of config.env so there's no second place
+            # to keep it in sync.
+            PORT=$(grep -E '^PORT=' config/config.env | head -1 | cut -d= -f2 | tr -d ' "\r' || true)
+            if [ -z "$PORT" ]; then
+              echo "ERROR: no PORT= line found in config/config.env"
+              exit 1
+            fi
+            echo "--> Checking http://localhost:${PORT}/health"
+
+            for i in $(seq 1 10); do
+              if curl -fsS "http://localhost:${PORT}/health"; then
+                echo ""
+                echo "Deploy verified."
+                exit 0
+              fi
+              echo "attempt $i failed, retrying in 3s..."
+              sleep 3
+            done
+
+            echo "Server never became healthy. Last 40 log lines:"
+            pm2 logs "${{ secrets.PM2_APP_NAME }}" --lines 40 --nostream || true
+            exit 1

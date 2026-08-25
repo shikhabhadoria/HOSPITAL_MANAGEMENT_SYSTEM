@@ -33,12 +33,25 @@ app.use(
     })
 )
 
+// Health check: cheap endpoint with no DB access.
+// Used by the tests and by the deploy job to confirm the server came back up.
+app.get("/health", (req, res) => {
+    res.status(200).json({
+        success: true,
+        message: "server is healthy",
+        uptime: process.uptime(),
+    });
+});
+
 app.use("/api/v1/message", messageRouter);
 app.use("/api/v1/user", userRouter);
 app.use("/api/v1/appointment", appointmentRouter);
 
 
-dbConnection();
+// In tests we never touch a real database, so skip the connection there.
+if (process.env.NODE_ENV !== "test") {
+    dbConnection();
+}
 
 app.use(errorMiddleware)
 

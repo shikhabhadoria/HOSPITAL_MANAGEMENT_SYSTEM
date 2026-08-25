@@ -70,7 +70,7 @@ export const login = catchAsyncErrors(async(req, res, next) => {
         return next(new ErrorHandler("Invalid password!", 400));
     }
     console.log("4");
-    if(role != user.role){
+    if(role !== user.role){
         return next(new ErrorHandler("user with this role is not found!", 400));
     }
     generateToken(user, "User Logged in successfully!", 200, res);
@@ -101,7 +101,7 @@ export const addNewAdmin = catchAsyncErrors(async(req, res, next) => {
         return next(new ErrorHandler("Admin with this Email Already Exist!"));
     }
   
-    const admin = await User.create({
+    await User.create({
         firstName,
         lastName,
         email,
