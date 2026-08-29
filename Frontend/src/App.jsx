@@ -10,6 +10,7 @@ import Register from "./pages/Register"
  import { ToastContainer  } from 'react-toastify';
 import Navbar from './Components/Navbar'
 import { Context } from './main.jsx'
+import Footer from './Components/Footer.jsx'
 const App = () => {
 
   const { isAuthenticated, setIsAuthenticated, setUser } =
@@ -46,6 +47,7 @@ const App = () => {
             <Route path="/login" element={<Login></Login>}></Route>
           </Routes>
           <ToastContainer position="top-center"></ToastContainer>
+          <Footer></Footer>
          </Router>
     </div>
   )
