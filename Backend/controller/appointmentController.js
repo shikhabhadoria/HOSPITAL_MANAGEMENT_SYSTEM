@@ -90,18 +90,12 @@ export const postAppointment = catchAsyncErrors(async(req, res, next)=>{
     });
 });
 
-let cachedAppointments = [];
 export const getAllAppointment = catchAsyncErrors(async(req, res, next) => {
-    if(cachedAppointments.length === 0){
-        console.log("calling db");
-        cachedAppointments = await Appointment.find();
-    }else{
-        console.log("returning from cache");
-    }
-    
+    const appointments = await Appointment.find();
+
     res.status(200).json({
-        success:true, 
-        cachedAppointments
+        success:true,
+        appointments
     })
 })
 

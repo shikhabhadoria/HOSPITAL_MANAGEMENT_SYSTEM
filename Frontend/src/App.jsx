@@ -11,6 +11,7 @@ import Register from "./pages/Register"
 import Navbar from './Components/Navbar'
 import { Context } from './main.jsx'
 import Footer from './Components/Footer.jsx'
+import { BACKEND_URL } from '../constant'
 const App = () => {
 
   const { isAuthenticated, setIsAuthenticated, setUser } =
@@ -20,7 +21,7 @@ const App = () => {
     const fetchUser = async () => {
       try {
         const response = await axios.get(
-          "http://localhost:4000/api/v1/user/patient/me",
+          `${BACKEND_URL}/api/v1/user/patient/me`,
           {
             withCredentials: true,
           }

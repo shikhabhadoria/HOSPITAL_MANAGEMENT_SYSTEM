@@ -1,11 +1,11 @@
-import axios from "axios";
 import React, { useContext, useState } from "react";
-import { toast } from "react-toastify";
 import { Context } from "../main";
-import { Link, Navigate, useNavigate } from "react-router-dom";
+import { Navigate, useNavigate } from "react-router-dom";
+import { toast } from "react-toastify";
+import axios from "axios";
 import { BACKEND_URL } from "../../constant";
 
-const Register = () => {
+const AddNewAdmin = () => {
   const { isAuthenticated, setIsAuthenticated } = useContext(Context);
 
   const [firstName, setFirstName] = useState("");
@@ -18,14 +18,14 @@ const Register = () => {
   const [password, setPassword] = useState("");
 
   const navigateTo = useNavigate();
-  const today = new Date().toISOString().split("T")[0]
-  const handleRegistration = async (e) => {
+
+  const handleAddNewAdmin = async (e) => {
     e.preventDefault();
     try {
       await axios
         .post(
-          `${BACKEND_URL}/api/v1/user/patient/register`,
-          { firstName, lastName, email, phone, nic, dob, gender, password, role:"Patient" },
+          `${BACKEND_URL}/api/v1/user/admin/addnew`,
+          { firstName, lastName, email, phone, nic, dob, gender, password },
           {
             withCredentials: true,
             headers: { "Content-Type": "application/json" },
@@ -45,37 +45,20 @@ const Register = () => {
           setPassword("");
         });
     } catch (error) {
-      toast.error(error.response?.data?.message || error.message);
+      toast.error(error.response.data.message);
     }
   };
 
-  function validatePhoneNumber(p){
-    if (p === "") {
-      return true;
-    }
-    const firstDigit = p.charAt(0) === "6" || p.charAt(0) === "7" ||
-     p.charAt(0) === "8" || p.charAt(0) === "9";
-    
-    if(p.length <= 10 && firstDigit){
-      return true;
-    }
-    return false;
-  }
-
-  if (isAuthenticated) {
-    return <Navigate to={"/"} />;
+  if (!isAuthenticated) {
+    return <Navigate to={"/login"} />;
   }
 
   return (
-    <>
-      <div className="container form-component register-form">
-        <h2>Sign Up</h2>
-        <p>Please Sign Up To Continue</p>
-        <p>
-          Lorem ipsum dolor sit amet consectetur adipisicing elit. Placeat culpa
-          voluptas expedita itaque ex, totam ad quod error?
-        </p>
-        <form onSubmit={handleRegistration}>
+    <section className="page">
+      <section className="container form-component add-admin-form">
+      <img src="/logo.png" alt="logo" className="logo"/>
+        <h1 className="form-title">ADD NEW ADMIN</h1>
+        <form onSubmit={handleAddNewAdmin}>
           <div>
             <input
               type="text"
@@ -98,19 +81,11 @@ const Register = () => {
               onChange={(e) => setEmail(e.target.value)}
             />
             <input
-                type="tel"
-                placeholder="Mobile Number"
-                value={phone}
-                maxLength={10}
-                onChange={(e) => {
-                  const value = e.target.value.replace(/\D/g, "");
-
-                  if (validatePhoneNumber(value)) {
-                    setPhone(value);
-                  }
-                }}
-              />
-
+              type="number"
+              placeholder="Mobile Number"
+              value={phone}
+              onChange={(e) => setPhone(e.target.value)}
+            />
           </div>
           <div>
             <input
@@ -119,23 +94,12 @@ const Register = () => {
               value={nic}
               onChange={(e) => setNic(e.target.value)}
             />
-            
-                  <input
-                    type="date"
-                    placeholder="Date of Birth"
-                    value={dob}
-                    max={today}
-                    onChange={(e) => {
-                      const selectedDate = e.target.value;
-
-                      if (selectedDate > today) {
-                        return; // Don't update state
-                      }
-
-                      setDob(selectedDate);
-                    }}
-                  />
-
+            <input
+              type={"date"}
+              placeholder="Date of Birth"
+              value={dob}
+              onChange={(e) => setDob(e.target.value)}
+            />
           </div>
           <div>
             <select value={gender} onChange={(e) => setGender(e.target.value)}>
@@ -150,28 +114,13 @@ const Register = () => {
               onChange={(e) => setPassword(e.target.value)}
             />
           </div>
-          <div
-            style={{
-              gap: "10px",
-              justifyContent: "flex-end",
-              flexDirection: "row",
-            }}
-          >
-            <p style={{ marginBottom: 0 }}>Already Registered?</p>
-            <Link
-              to={"/login"}
-              style={{ textDecoration: "none", color: "#271776ca" }}
-            >
-              Login Now
-            </Link>
-          </div>
           <div style={{ justifyContent: "center", alignItems: "center" }}>
-            <button type="submit">Register</button>
+            <button type="submit">ADD NEW ADMIN</button>
           </div>
         </form>
-      </div>
-    </>
+      </section>
+    </section>
   );
 };
 
-export default Register;
+export default AddNewAdmin;

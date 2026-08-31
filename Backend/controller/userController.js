@@ -51,25 +51,20 @@ export const patientRegister = catchAsyncErrors(async(req, res, next)=>{
 });
 
 export const login = catchAsyncErrors(async(req, res, next) => {
-    const {email, password, confirmPassword, role} = req.body;
-    if(!email || !password || !confirmPassword || !role){
+    const {email, password, role} = req.body;
+    if(!email || !password|| !role){
         return next(new ErrorHandler("Please provide All the details!", 400));
     }
-    console.log("1");
-    if(password !== confirmPassword){
-        return next(new ErrorHandler("Password and confirm passwords do not match!", 400));
-    }
-    console.log("2");
+   
     const user = await User.findOne({email}).select("+password");
     if(!user){
         return next(new ErrorHandler("Invalid password or Email", 400));
     }
-    console.log("3");
     const isPasswordMatched = await user.comparedPassword(password);
     if(!isPasswordMatched){
         return next(new ErrorHandler("Invalid password!", 400));
     }
-    console.log("4");
+
     if(role !== user.role){
         return next(new ErrorHandler("user with this role is not found!", 400));
     }
@@ -121,10 +116,10 @@ export const addNewAdmin = catchAsyncErrors(async(req, res, next) => {
 });
 
 export const getAllDocters = catchAsyncErrors(async(req, res, next)=>{
-    const docters = await User.find({ role: "Doctor" });
+    const doctors = await User.find({ role: "Doctor" });
     res.status(200).json({
         success:true,
-        docters,
+        doctors,
     });
 });
 
