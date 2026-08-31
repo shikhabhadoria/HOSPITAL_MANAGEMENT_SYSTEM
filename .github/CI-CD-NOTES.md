@@ -8,7 +8,7 @@ Companion to [`.github/workflows/backend-ci-cd.yml`](workflows/backend-ci-cd.yml
 |---|---|---|
 | **Workflow** | One automated process = one YAML file in `.github/workflows/` | `Backend CI/CD` |
 | **Event / trigger** | What makes it run (`on:`) | push & PR to `main`/`master`, manual button |
-| **Job** | A named group of steps that runs on **one fresh VM** | `lint`, `test`, `deploy` |
+| **Job** | A named group of steps that runs on **one fresh VM** | `lint`, `deploy` |
 | **Runner** | The VM GitHub gives the job (`runs-on:`) | `ubuntu-latest` |
 | **Step** | One command or one reusable action | "Install dependencies" |
 | **Action** | Someone else's reusable step, pulled in with `uses:` | `actions/checkout@v4` |
@@ -21,27 +21,32 @@ survives from one job to the next unless you explicitly pass it (artifacts/cache
 `needs:` is what turns parallel jobs into a pipeline:
 
 ```
-lint ──▶ test ──▶ deploy
- (fast, no code run)  (runs the code)  (only on push to main/master)
+lint ──────────▶ deploy
+(fast, no code run)   (only on push to main/master)
 ```
 
 ## 2. CI vs CD
 
-- **CI (Continuous Integration)** — `lint` + `test`. Every push gets automatically
+- **CI (Continuous Integration)** — the `lint` job. Every push gets automatically
   checked. The point is to catch breakage in minutes, not after it's on the server.
 - **CD (Continuous Deployment)** — `deploy`. When CI is green on `main`/`master`,
   the new code goes live with no human SSH-ing anywhere.
 
-Why lint before test? Lint is seconds; tests are slower. Fail cheap first.
+Lint runs first and deploy `needs: lint`, so nothing that fails static checks can
+reach the server. Fail cheap, fail early.
 
 Real proof this works: when we added ESLint to this repo it immediately found three
 live bugs — an undefined `message` variable, a misspelled `Errorhandler` that would
 have crashed `updateAppointmentStatus`, and `"CasteError"` instead of `"CastError"`.
 
-## 3. The tests
+## 3. The tests (local for now — a ready-made 3rd job)
 
-`Backend/test/` uses Node's built-in runner (`node --test`) plus **supertest**, which
-calls the Express app in-process — no server to start, no port to bind.
+The workflow currently has two jobs. There is also a working test suite in
+`Backend/test/`, run with `npm test`, that is **not** wired into CI yet — adding it
+is the natural next lesson (see the end of this file).
+
+It uses Node's built-in runner (`node --test`) plus **supertest**, which calls the
+Express app in-process — no server to start, no port to bind.
 
 The tests never touch MongoDB. `app.js` has:
 
@@ -139,7 +144,17 @@ debug from the browser instead of SSH-ing in.
 
 ## 7. Things to demo live
 
-1. Push a broken line (`const x = ;`) → watch **lint** go red, and `test`/`deploy` never start.
-2. Change a test's expected status to `999` → **lint** passes, **test** fails, no deploy.
-3. Open a PR → lint + test run, deploy is skipped (the `if:` guard).
-4. Merge to `master` → all three run, `pm2 list` on EC2 shows a bumped restart count.
+1. Push a broken line (`const x = ;`) → **lint** goes red and **deploy** never starts.
+2. Push an unused variable → lint fails on a *style* problem, not a crash. Good moment
+   to explain why teams gate on this at all.
+3. Open a PR → lint runs, deploy is skipped (point at the `if:` guard).
+4. Merge to `master` → both jobs run; `pm2 list` on EC2 shows a bumped restart count.
+5. Break the health check on purpose (`pm2 stop hms-backend` right after a deploy
+   starts) → the smoke-test step goes red and prints the pm2 logs in the browser.
+
+### Adding a 3rd job as the next lesson
+
+`Backend/test/` already has 7 passing tests. Turning them into a `test` job is a
+copy-paste of the `lint` job with `run: npm test` and `NODE_ENV: test`, then changing
+deploy to `needs: [lint, test]`. Doing it live is a clean way to show that jobs are
+just blocks you compose, and that `needs:` is the only thing creating order.

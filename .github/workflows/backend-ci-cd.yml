@@ -126,7 +126,9 @@ jobs:
           username: ${{ secrets.EC2_USER }}     # e.g. ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}       # the full .pem contents
           port: 22
-          script_stop: true                     # abort on the first failing line
+          # NOTE: many tutorials pass `script_stop` here - that input was REMOVED
+          # in ssh-action v1. Putting `set -e` at the top of the script replaces
+          # it: bash then aborts on the first command that fails.
           script: |
             set -e
 
@@ -187,8 +189,12 @@ jobs:
           username: ${{ secrets.EC2_USER }}
           key: ${{ secrets.EC2_SSH_KEY }}
           port: 22
-          script_stop: true
+          # NOTE: many tutorials pass `script_stop` here - that input was REMOVED
+          # in ssh-action v1. Putting `set -e` at the top of the script replaces
+          # it: bash then aborts on the first command that fails.
           script: |
+            set -e
+
             cd "${{ secrets.EC2_APP_DIR }}/Backend"
 
             # Read PORT straight out of config.env so there's no second place
