@@ -13,7 +13,7 @@ import { useNavigate } from "react-router-dom";
 import { BACKEND_URL } from "../../constant";
 
 
-const Sidebar = () => {
+const SideBar = () => {
   const [show, setShow] = useState(false);
 
   const { isAuthenticated, setIsAuthenticated } = useContext(Context);
@@ -80,4 +80,4 @@ const Sidebar = () => {
   );
 };
 
-export default Sidebar;
+export default SideBar;

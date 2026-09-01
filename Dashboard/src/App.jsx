@@ -14,7 +14,7 @@ import { Context } from "./main";
 import axios from "axios";
 import { ToastContainer } from "react-toastify";
 import "react-toastify/dist/ReactToastify.css";
-import Sidebar from "./components/Sidebar";
+import SideBar from "./components/SideBar";
 import AddNewAdmin from "./components/AddNewAdmin";
 import "./App.css";
 import { BACKEND_URL } from "../constant";
