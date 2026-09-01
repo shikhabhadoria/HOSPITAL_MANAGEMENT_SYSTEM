@@ -526,7 +526,7 @@ body {
   form
   .first-wrapper
   div:first-child
-  input:file-selector-button {
+  input::file-selector-button {
   position: absolute;
   width: 100%;
 }
