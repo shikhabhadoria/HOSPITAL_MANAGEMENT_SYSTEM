@@ -10,7 +10,7 @@ router.post(
     postAppointment
 );
 
-router.get("/getall", isAdminAuthenticated, getAllAppointment);
+router.get("/getall", getAllAppointment);
 router.put("/update/:id", isAdminAuthenticated, updateAppointmentStatus); 
 router.delete("/delete/:id", isAdminAuthenticated, deleteAppointment);
 
